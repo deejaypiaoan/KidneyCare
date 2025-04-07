@@ -178,9 +178,14 @@ const PatientManagement = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
-                              navigate(`/admin/patients/edit/${patient.id}`)
-                            }
+                            onClick={() => {
+                              // Store the patient ID for editing
+                              localStorage.setItem(
+                                "editingPatientId",
+                                patient.patientId,
+                              );
+                              navigate("/admin/patients/create");
+                            }}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>

@@ -83,9 +83,33 @@ const LoginForm = ({
     },
   });
 
-  // Update form values when user type changes
+  // Update form values when user type changes and check for temp credentials
   useEffect(() => {
     form.setValue("userType", userType);
+
+    // Check for temporary credentials in sessionStorage
+    const tempPatientId = sessionStorage.getItem("tempPatientId");
+    const tempPatientPassword = sessionStorage.getItem("tempPatientPassword");
+
+    if (tempPatientId && tempPatientPassword) {
+      console.log("Found temporary credentials in sessionStorage", {
+        tempPatientId,
+        tempPatientPassword,
+      });
+
+      // Set the form values
+      form.setValue("userType", "patient");
+      form.setValue("patientId", tempPatientId);
+      form.setValue("password", tempPatientPassword);
+      setUserType("patient");
+
+      // Clear the temporary credentials
+      sessionStorage.removeItem("tempPatientId");
+      sessionStorage.removeItem("tempPatientPassword");
+
+      // Auto-submit the form after a short delay
+      setTimeout(() => form.handleSubmit(onSubmit)(), 500);
+    }
   }, [userType, form]);
 
   const onSubmit = async (data: LoginFormValues) => {

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Save, User, Mail, Lock, Copy } from "lucide-react";
+import { Save, User, Mail, Lock, Copy, LogIn } from "lucide-react";
 
 import {
   Form,
@@ -39,20 +40,49 @@ const patientAccountSchema = z.object({
 type PatientAccountFormValues = z.infer<typeof patientAccountSchema>;
 
 const PatientAccountForm = () => {
+  const navigate = useNavigate();
   const [showSuccess, setShowSuccess] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] =
     useState<PatientAccountFormValues | null>(null);
 
-  // Initialize form with default values
-  const form = useForm<PatientAccountFormValues>({
-    resolver: zodResolver(patientAccountSchema),
-    defaultValues: {
+  // Check if we're editing an existing patient
+  const editingPatientId = localStorage.getItem("editingPatientId");
+  const [isEditing, setIsEditing] = useState(!!editingPatientId);
+
+  // Get existing patient data if editing
+  const getExistingPatientData = () => {
+    if (editingPatientId) {
+      const existingUsers = JSON.parse(
+        localStorage.getItem("registeredUsers") || "[]",
+      );
+      const existingPatient = existingUsers.find(
+        (user: any) => user.patientId === editingPatientId,
+      );
+
+      if (existingPatient) {
+        return {
+          firstName: existingPatient.firstName || "",
+          lastName: existingPatient.lastName || "",
+          email: existingPatient.email || "",
+          patientId: existingPatient.patientId,
+          password: existingPatient.password || generateRandomPassword(),
+        };
+      }
+    }
+
+    return {
       firstName: "",
       lastName: "",
       email: "",
       patientId: `PAT-${Math.floor(100000 + Math.random() * 900000)}`,
       password: generateRandomPassword(),
-    },
+    };
+  };
+
+  // Initialize form with default values or existing patient data
+  const form = useForm<PatientAccountFormValues>({
+    resolver: zodResolver(patientAccountSchema),
+    defaultValues: getExistingPatientData(),
   });
 
   // Function to generate a random password
@@ -85,6 +115,85 @@ const PatientAccountForm = () => {
     alert("Copied to clipboard!");
   };
 
+  // Function to redirect to patient login page
+  const redirectToPatientLogin = () => {
+    if (generatedCredentials) {
+      // Make sure the user is registered in localStorage
+      const existingUsers = JSON.parse(
+        localStorage.getItem("registeredUsers") || "[]",
+      );
+
+      // Check if user already exists
+      const userExists = existingUsers.some(
+        (u: any) => u.patientId === generatedCredentials.patientId,
+      );
+
+      if (!userExists) {
+        // Add user to registered users if not already there
+        const newUser = {
+          id: Date.now(),
+          username: generatedCredentials.patientId,
+          firstName: generatedCredentials.firstName,
+          lastName: generatedCredentials.lastName,
+          email: generatedCredentials.email,
+          password: generatedCredentials.password,
+          role: "patient",
+          patientId: generatedCredentials.patientId,
+          createdAt: new Date().toISOString(),
+          createdBy:
+            JSON.parse(localStorage.getItem("user") || "{}").username ||
+            "admin",
+        };
+
+        existingUsers.push(newUser);
+        localStorage.setItem("registeredUsers", JSON.stringify(existingUsers));
+        console.log("Added user to registeredUsers:", newUser);
+      }
+
+      // Store the credentials temporarily in sessionStorage for auto-fill
+      sessionStorage.setItem("tempPatientId", generatedCredentials.patientId);
+      sessionStorage.setItem(
+        "tempPatientPassword",
+        generatedCredentials.password,
+      );
+
+      console.log("Stored credentials in sessionStorage", {
+        patientId: generatedCredentials.patientId,
+        password: generatedCredentials.password,
+      });
+
+      // Create a basic patient profile in localStorage if it doesn't exist
+      const patientProfile = {
+        firstName: generatedCredentials.firstName,
+        middleName: "",
+        lastName: generatedCredentials.lastName,
+        dateOfBirth: "",
+        phone: "",
+        email: generatedCredentials.email,
+        address: "",
+        barangay: "",
+        municipality: "",
+        province: "",
+        zipCode: "",
+        emergencyContactName: "",
+        emergencyContactPhone: "",
+        profilePicture: "",
+      };
+
+      // Store the profile with the patientId as the key
+      localStorage.setItem(
+        `patientProfile_${generatedCredentials.patientId}`,
+        JSON.stringify(patientProfile),
+      );
+
+      // Also store a copy in the standard location for immediate use
+      localStorage.setItem("patientProfile", JSON.stringify(patientProfile));
+
+      // Navigate to auth page
+      navigate("/auth");
+    }
+  };
+
   // Handle form submission
   const onSubmit = (data: PatientAccountFormValues) => {
     try {
@@ -93,61 +202,110 @@ const PatientAccountForm = () => {
         localStorage.getItem("registeredUsers") || "[]",
       );
 
-      // Check if patientId already exists
-      const patientExists = existingUsers.some(
-        (user: any) => user.patientId === data.patientId,
-      );
-
-      if (patientExists) {
-        alert("This Patient ID already exists. Please generate a new one.");
-        return;
-      }
-
-      // Create new user with patient role
-      const newUser = {
-        id: Date.now(),
-        username: data.patientId, // Use patientId as username for patients
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        password: data.password,
-        role: "patient",
-        patientId: data.patientId,
-        createdAt: new Date().toISOString(),
-        createdBy:
-          JSON.parse(localStorage.getItem("user") || "{}").username || "admin",
-      };
-
-      // Add to existing users and save
-      existingUsers.push(newUser);
-      localStorage.setItem("registeredUsers", JSON.stringify(existingUsers));
-
-      // Show success message and store generated credentials
-      setGeneratedCredentials(data);
-      setShowSuccess(true);
-
-      // Reset form after successful submission
-      setTimeout(() => {
-        form.reset({
-          firstName: "",
-          lastName: "",
-          email: "",
-          patientId: `PAT-${Math.floor(100000 + Math.random() * 900000)}`,
-          password: generateRandomPassword(),
+      if (isEditing && editingPatientId) {
+        // Update existing patient
+        const updatedUsers = existingUsers.map((user: any) => {
+          if (user.patientId === editingPatientId) {
+            return {
+              ...user,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              email: data.email,
+              password: data.password,
+              updatedAt: new Date().toISOString(),
+              updatedBy:
+                JSON.parse(localStorage.getItem("user") || "{}").username ||
+                "admin",
+            };
+          }
+          return user;
         });
-      }, 5000);
+
+        localStorage.setItem("registeredUsers", JSON.stringify(updatedUsers));
+
+        // Update patient profile
+        const profileKey = `patientProfile_${editingPatientId}`;
+        const existingProfile = JSON.parse(
+          localStorage.getItem(profileKey) || "{}",
+        );
+        const updatedProfile = {
+          ...existingProfile,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+        };
+
+        localStorage.setItem(profileKey, JSON.stringify(updatedProfile));
+
+        // Clear editing state
+        localStorage.removeItem("editingPatientId");
+        setIsEditing(false);
+
+        // Show success message
+        alert("Patient updated successfully!");
+        navigate("/admin/patients");
+      } else {
+        // Check if patientId already exists
+        const patientExists = existingUsers.some(
+          (user: any) => user.patientId === data.patientId,
+        );
+
+        if (patientExists) {
+          alert("This Patient ID already exists. Please generate a new one.");
+          return;
+        }
+
+        // Create new user with patient role
+        const newUser = {
+          id: Date.now(),
+          username: data.patientId, // Use patientId as username for patients
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          password: data.password,
+          role: "patient",
+          patientId: data.patientId,
+          createdAt: new Date().toISOString(),
+          createdBy:
+            JSON.parse(localStorage.getItem("user") || "{}").username ||
+            "admin",
+        };
+
+        // Add to existing users and save
+        existingUsers.push(newUser);
+        localStorage.setItem("registeredUsers", JSON.stringify(existingUsers));
+
+        // Show success message and store generated credentials
+        setGeneratedCredentials(data);
+        setShowSuccess(true);
+
+        // Reset form after successful submission
+        setTimeout(() => {
+          form.reset({
+            firstName: "",
+            lastName: "",
+            email: "",
+            patientId: `PAT-${Math.floor(100000 + Math.random() * 900000)}`,
+            password: generateRandomPassword(),
+          });
+        }, 5000);
+      }
     } catch (error) {
-      console.error("Error creating patient account:", error);
-      alert("Failed to create patient account. Please try again.");
+      console.error("Error creating/updating patient account:", error);
+      alert("Failed to create/update patient account. Please try again.");
     }
   };
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Create Patient Account</CardTitle>
+        <CardTitle>
+          {isEditing ? "Edit Patient Account" : "Create Patient Account"}
+        </CardTitle>
         <CardDescription>
-          Create a new patient account and generate login credentials
+          {isEditing
+            ? "Update patient account information"
+            : "Create a new patient account and generate login credentials"}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -198,6 +356,14 @@ const PatientAccountForm = () => {
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
+                </div>
+                <div className="mt-4">
+                  <Button
+                    onClick={redirectToPatientLogin}
+                    className="w-full bg-primary hover:bg-primary/90"
+                  >
+                    <LogIn className="mr-2 h-4 w-4" /> Login as Patient
+                  </Button>
                 </div>
               </div>
             </AlertDescription>
@@ -346,7 +512,10 @@ const PatientAccountForm = () => {
 
             <div className="flex justify-end">
               <Button type="submit">
-                <Save className="mr-2 h-4 w-4" /> Create Patient Account
+                <Save className="mr-2 h-4 w-4" />{" "}
+                {isEditing
+                  ? "Update Patient Account"
+                  : "Create Patient Account"}
               </Button>
             </div>
           </form>

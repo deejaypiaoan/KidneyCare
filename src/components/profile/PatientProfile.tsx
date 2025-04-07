@@ -184,7 +184,14 @@ const PatientProfile = ({
 
   // Load actual profile data from localStorage
   useEffect(() => {
-    const savedProfile = localStorage.getItem("patientProfile");
+    const patientId = localStorage.getItem("patientId");
+    const profileKey = patientId
+      ? `patientProfile_${patientId}`
+      : "patientProfile";
+
+    const savedProfile =
+      localStorage.getItem(profileKey) ||
+      localStorage.getItem("patientProfile");
     if (savedProfile) {
       const parsedProfile = JSON.parse(savedProfile);
       setActualProfileData(parsedProfile);
@@ -193,7 +200,9 @@ const PatientProfile = ({
       }
     }
 
-    const savedMedical = localStorage.getItem("medicalData");
+    const medicalKey = patientId ? `medicalData_${patientId}` : "medicalData";
+    const savedMedical =
+      localStorage.getItem(medicalKey) || localStorage.getItem("medicalData");
     if (savedMedical) {
       setActualMedicalData(JSON.parse(savedMedical));
     }

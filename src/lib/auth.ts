@@ -50,13 +50,34 @@ export async function loginUser(credentials: LoginCredentials) {
     // Find user by credential (username or patient ID)
     let user;
     if (credentials.userType === "patient") {
+      // Try to find by patientId first
       user = existingUsers.find(
         (u: any) => u.patientId === credentials.credential,
       );
+
+      // If not found, try by username
+      if (!user) {
+        user = existingUsers.find(
+          (u: any) =>
+            u.username === credentials.credential && u.role === "patient",
+        );
+      }
+
+      // If still not found, try by email
+      if (!user) {
+        user = existingUsers.find(
+          (u: any) =>
+            u.email === credentials.credential && u.role === "patient",
+        );
+      }
+
+      console.log("Found patient user:", user);
+      console.log("All registered users:", existingUsers);
     } else {
       user = existingUsers.find(
         (u: any) =>
-          u.username === credentials.credential &&
+          (u.username === credentials.credential ||
+            u.email === credentials.credential) &&
           (u.role === "admin" || u.role === "doctor" || u.role === "nurse"),
       );
     }

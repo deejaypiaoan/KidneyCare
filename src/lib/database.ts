@@ -33,6 +33,12 @@ export async function savePatientProfile(profileData: any) {
     if (patientId) {
       // Update existing profile
       result = await apiUpdatePatientProfile(patientId, profileData);
+
+      // Also save to localStorage with patient-specific key
+      localStorage.setItem(
+        `patientProfile_${patientId}`,
+        JSON.stringify(profileData),
+      );
     } else {
       // Create new profile
       result = await apiCreatePatientProfile(profileData);
@@ -40,8 +46,15 @@ export async function savePatientProfile(profileData: any) {
       // Save the new patient ID to localStorage
       if (result.success && result.data && result.data.id) {
         localStorage.setItem("patientId", result.data.id);
+        localStorage.setItem(
+          `patientProfile_${result.data.id}`,
+          JSON.stringify(profileData),
+        );
       }
     }
+
+    // Always update the standard location too
+    localStorage.setItem("patientProfile", JSON.stringify(profileData));
 
     return result;
   } catch (error) {
@@ -67,6 +80,15 @@ export async function saveMedicalInfo(medicalData: any, patientId: string) {
       // Create new medical info
       result = await apiCreateMedicalInfo(medicalData, patientId);
     }
+
+    // Save to localStorage with patient-specific key
+    localStorage.setItem(
+      `medicalData_${patientId}`,
+      JSON.stringify(medicalData),
+    );
+
+    // Also save to standard location
+    localStorage.setItem("medicalData", JSON.stringify(medicalData));
 
     return result;
   } catch (error) {
